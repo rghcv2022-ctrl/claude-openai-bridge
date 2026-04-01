@@ -1,6 +1,6 @@
 # claude-openai-proxy
 
-Minimal independent proxy bootstrap for Claude-to-OpenAI style routing.
+Minimal local Anthropic-compatible proxy for Claude Code on Windows, forwarding requests to the GMN OpenAI-compatible API.
 
 ## Quick start
 
@@ -9,6 +9,8 @@ Minimal independent proxy bootstrap for Claude-to-OpenAI style routing.
    `py -3.9 -m pip install -r requirements.txt`
 3. Run server:
    `py -3.9 -m uvicorn app:app --host 127.0.0.1 --port 43118`
+
+This project is intended to run locally on Windows for Claude Code. It presents an Anthropic-compatible local endpoint and routes traffic to GMN's OpenAI-compatible `/v1/chat/completions` API.
 
 ## Config
 

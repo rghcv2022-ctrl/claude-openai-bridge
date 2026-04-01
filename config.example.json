@@ -5,9 +5,16 @@
   "upstream_api_key": "replace-with-your-key",
   "upstream_chat_path": "/chat/completions",
   "default_model": "gpt-5.4",
-  "request_timeout_seconds": 30,
+  "request_timeout_seconds": 600,
   "log_level": "INFO",
   "model_aliases": {
-    "claude-sonnet-4-5": "gpt-5.4"
+    "claude-*": "gpt-5.4",
+    "claude-sonnet*": "gpt-5.4",
+    "claude-opus*": "gpt-5.4",
+    "claude-haiku*": "gpt-5.4",
+    "claude-sonnet-4-5": "gpt-5.4",
+    "sonnet": "gpt-5.4",
+    "opus": "gpt-5.4",
+    "haiku": "gpt-5.4"
   }
 }
