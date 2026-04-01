@@ -145,20 +145,15 @@ def test_anthropic_request_to_openai_raises_on_unknown_content_block():
         anthropic_request_to_openai(payload, "gpt-default", {})
 
 
-def test_anthropic_request_to_openai_supports_system_message_role():
+def test_anthropic_request_to_openai_raises_on_system_message_role():
     payload = {
         "messages": [
-            {"role": "system", "content": [{"type": "text", "text": "Stay concise."}]},
-            {"role": "user", "content": [{"type": "text", "text": "Ping"}]},
+            {"role": "system", "content": [{"type": "text", "text": "Stay concise."}]}
         ]
     }
 
-    converted = anthropic_request_to_openai(payload, "gpt-default", {})
-
-    assert converted["messages"] == [
-        {"role": "system", "content": "Stay concise."},
-        {"role": "user", "content": "Ping"},
-    ]
+    with pytest.raises(ValueError, match="Unsupported message role: system"):
+        anthropic_request_to_openai(payload, "gpt-default", {})
 
 
 def test_anthropic_request_to_openai_raises_on_unknown_role():
