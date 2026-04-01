@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from app import build_app, load_config
@@ -33,6 +35,18 @@ def test_load_config_reads_default_config_json(tmp_path, monkeypatch):
     cfg = load_config()
     assert cfg["listen_host"] == "127.0.0.1"
     assert cfg["listen_port"] == 43118
+
+
+def test_load_config_reads_utf8_bom_json_from_env(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(make_config(model_aliases={"claude-sonnet-4-5": "gpt-5.4"})),
+        encoding="utf-8-sig",
+    )
+    monkeypatch.setenv("CLAUDE_OPENAI_PROXY_CONFIG", str(config_path))
+
+    cfg = load_config()
+    assert cfg["default_model"] == "gpt-5.4"
 
 
 def test_healthz_reads_json_config(tmp_path, monkeypatch):

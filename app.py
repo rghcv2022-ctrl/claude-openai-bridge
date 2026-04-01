@@ -32,7 +32,7 @@ def _resolve_config_path():
 
 def load_config():
     config_path = _resolve_config_path()
-    with config_path.open("r", encoding="utf-8") as f:
+    with config_path.open("r", encoding="utf-8-sig") as f:
         return json.load(f)
 
 
