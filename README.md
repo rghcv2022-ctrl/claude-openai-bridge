@@ -1,6 +1,6 @@
 # claude-openai-proxy
 
-Minimal local Anthropic-compatible proxy for Claude Code on Windows, forwarding requests to the GMN OpenAI-compatible API.
+Bootstrap scaffold for a local Anthropic-compatible proxy used by Claude Code on Windows, intended to forward to the GMN OpenAI-compatible API as implementation is completed.
 
 ## Quick start
 
@@ -10,7 +10,8 @@ Minimal local Anthropic-compatible proxy for Claude Code on Windows, forwarding 
 3. Run server:
    `py -3.9 -m uvicorn app:app --host 127.0.0.1 --port 43118`
 
-This project is intended to run locally on Windows for Claude Code. It presents an Anthropic-compatible local endpoint and routes traffic to GMN's OpenAI-compatible `/v1/chat/completions` API.
+Current implemented scope is intentionally small: configuration loading plus a `/healthz` endpoint.
+Full Anthropic-to-GMN request forwarding is not implemented in this scaffold yet.
 
 ## Config
 

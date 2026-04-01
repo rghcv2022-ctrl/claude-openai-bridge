@@ -1,28 +1,13 @@
 from fastapi.testclient import TestClient
 
 from app import build_app, load_config
+from bridge import resolve_upstream_model
+from conftest import make_config, write_config
 
 
 def test_load_config_reads_json_from_env(tmp_path, monkeypatch):
     config_path = tmp_path / "config.json"
-    config_path.write_text(
-        (
-            '{\n'
-            '  "listen_host": "127.0.0.1",\n'
-            '  "listen_port": 43118,\n'
-            '  "upstream_base_url": "https://gmncode.cn/v1",\n'
-            '  "upstream_api_key": "test-key",\n'
-            '  "upstream_chat_path": "/chat/completions",\n'
-            '  "default_model": "gpt-5.4",\n'
-            '  "request_timeout_seconds": 30,\n'
-            '  "log_level": "INFO",\n'
-            '  "model_aliases": {\n'
-            '    "claude-sonnet-4-5": "gpt-5.4"\n'
-            "  }\n"
-            "}\n"
-        ),
-        encoding="utf-8",
-    )
+    write_config(config_path, make_config(model_aliases={"claude-sonnet-4-5": "gpt-5.4"}))
     monkeypatch.setenv("CLAUDE_OPENAI_PROXY_CONFIG", str(config_path))
 
     cfg = load_config()
@@ -41,7 +26,7 @@ def test_load_config_reads_json_from_env(tmp_path, monkeypatch):
 
 def test_load_config_reads_default_config_json(tmp_path, monkeypatch):
     config_path = tmp_path / "config.json"
-    config_path.write_text('{"listen_host":"127.0.0.1","listen_port":43118,"upstream_base_url":"https://gmncode.cn/v1","upstream_api_key":"k","upstream_chat_path":"/chat/completions","default_model":"gpt-5.4","request_timeout_seconds":30,"log_level":"INFO","model_aliases":{}}', encoding="utf-8")
+    write_config(config_path, make_config(upstream_api_key="k", model_aliases={}))
     monkeypatch.delenv("CLAUDE_OPENAI_PROXY_CONFIG", raising=False)
     monkeypatch.chdir(tmp_path)
 
@@ -52,24 +37,7 @@ def test_load_config_reads_default_config_json(tmp_path, monkeypatch):
 
 def test_healthz_reads_json_config(tmp_path, monkeypatch):
     config_path = tmp_path / "config.json"
-    config_path.write_text(
-        (
-            '{\n'
-            '  "listen_host": "127.0.0.1",\n'
-            '  "listen_port": 43118,\n'
-            '  "upstream_base_url": "https://gmncode.cn/v1",\n'
-            '  "upstream_api_key": "test-key",\n'
-            '  "upstream_chat_path": "/chat/completions",\n'
-            '  "default_model": "gpt-5.4",\n'
-            '  "request_timeout_seconds": 30,\n'
-            '  "log_level": "INFO",\n'
-            '  "model_aliases": {\n'
-            '    "claude-sonnet-4-5": "gpt-5.4"\n'
-            "  }\n"
-            "}\n"
-        ),
-        encoding="utf-8",
-    )
+    write_config(config_path, make_config(model_aliases={"claude-sonnet-4-5": "gpt-5.4"}))
     monkeypatch.setenv("CLAUDE_OPENAI_PROXY_CONFIG", str(config_path))
 
     client = TestClient(build_app())
@@ -82,3 +50,15 @@ def test_healthz_reads_json_config(tmp_path, monkeypatch):
         "upstream_base_url": "https://gmncode.cn/v1",
         "default_model": "gpt-5.4",
     }
+
+
+def test_resolve_upstream_model_uses_exact_alias():
+    aliases = {"sonnet": "gpt-5.4"}
+    resolved = resolve_upstream_model("sonnet", "gpt-5.4-mini", aliases)
+    assert resolved == "gpt-5.4"
+
+
+def test_resolve_upstream_model_supports_wildcard_alias():
+    aliases = {"claude-sonnet*": "gpt-5.4", "claude-*": "gpt-5.4-mini"}
+    resolved = resolve_upstream_model("claude-sonnet-4-5", "gpt-default", aliases)
+    assert resolved == "gpt-5.4"
