@@ -1,0 +1,13 @@
+{
+  "listen_host": "127.0.0.1",
+  "listen_port": 43118,
+  "upstream_base_url": "https://gmncode.cn/v1",
+  "upstream_api_key": "replace-with-your-key",
+  "upstream_chat_path": "/chat/completions",
+  "default_model": "gpt-5.4",
+  "request_timeout_seconds": 30,
+  "log_level": "INFO",
+  "model_aliases": {
+    "claude-sonnet-4-5": "gpt-5.4"
+  }
+}
