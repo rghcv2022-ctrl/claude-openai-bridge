@@ -1,6 +1,8 @@
 import fnmatch
 import json
 
+import tiktoken
+
 
 def resolve_upstream_model(requested_model, default_model, model_aliases):
     if not requested_model:
@@ -192,6 +194,65 @@ def _convert_tool_choice(tool_choice):
     if choice_type == "tool":
         return {"type": "function", "function": {"name": tool_choice.get("name")}}
     return None
+
+
+def _map_finish_reason(finish_reason):
+    if finish_reason == "stop":
+        return "end_turn"
+    if finish_reason == "length":
+        return "max_tokens"
+    if finish_reason == "tool_calls":
+        return "tool_use"
+    return "end_turn"
+
+
+def openai_response_to_anthropic(payload, requested_model):
+    choice = payload["choices"][0]
+    message = choice["message"]
+    content = []
+
+    if message.get("content"):
+        content.append({"type": "text", "text": message["content"]})
+
+    for tool_call in message.get("tool_calls", []):
+        arguments = tool_call.get("function", {}).get("arguments") or "{}"
+        content.append(
+            {
+                "type": "tool_use",
+                "id": tool_call.get("id"),
+                "name": tool_call.get("function", {}).get("name"),
+                "input": json.loads(arguments),
+            }
+        )
+
+    usage = payload.get("usage", {})
+    return {
+        "id": payload.get("id", "msg_proxy"),
+        "type": "message",
+        "role": "assistant",
+        "model": requested_model or payload.get("model", ""),
+        "content": content,
+        "stop_reason": _map_finish_reason(choice.get("finish_reason")),
+        "stop_sequence": None,
+        "usage": {
+            "input_tokens": usage.get("prompt_tokens", 0),
+            "output_tokens": usage.get("completion_tokens", 0),
+        },
+    }
+
+
+def estimate_input_tokens(payload, default_model, model_aliases):
+    normalized = anthropic_request_to_openai(
+        payload,
+        default_model=default_model,
+        model_aliases=model_aliases,
+    )
+    text = json.dumps(normalized, ensure_ascii=False, sort_keys=True)
+    try:
+        encoding = tiktoken.get_encoding("cl100k_base")
+        return len(encoding.encode(text))
+    except Exception:
+        return max(1, len(text) // 4)
 
 
 def _strip_none(value):
