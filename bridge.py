@@ -255,6 +255,147 @@ def estimate_input_tokens(payload, default_model, model_aliases):
         return max(1, len(text) // 4)
 
 
+def openai_stream_to_anthropic_events(chunks, requested_model):
+    message_id = "msg_proxy_stream"
+    text_block_open = False
+    stopped_blocks = set()
+    tool_states = {}
+
+    yield {
+        "event": "message_start",
+        "data": {
+            "type": "message_start",
+            "message": {
+                "id": message_id,
+                "type": "message",
+                "role": "assistant",
+                "model": requested_model,
+                "content": [],
+                "stop_reason": None,
+                "stop_sequence": None,
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+            },
+        },
+    }
+
+    for chunk in chunks:
+        choice = chunk["choices"][0]
+        delta = choice.get("delta", {})
+        text = delta.get("content")
+        tool_calls = delta.get("tool_calls", [])
+
+        if tool_calls and text_block_open and 0 not in stopped_blocks:
+            yield {
+                "event": "content_block_stop",
+                "data": {"type": "content_block_stop", "index": 0},
+            }
+            stopped_blocks.add(0)
+            text_block_open = False
+
+        if text:
+            if not text_block_open:
+                yield {
+                    "event": "content_block_start",
+                    "data": {
+                        "type": "content_block_start",
+                        "index": 0,
+                        "content_block": {"type": "text", "text": ""},
+                    },
+                }
+                text_block_open = True
+
+            yield {
+                "event": "content_block_delta",
+                "data": {
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {"type": "text_delta", "text": text},
+                },
+            }
+
+        for tool_call in tool_calls:
+            block_index = tool_call["index"] + 1
+            state = tool_states.setdefault(
+                block_index,
+                {
+                    "id": f"toolu_proxy_{tool_call['index']}",
+                    "name": None,
+                    "started": False,
+                },
+            )
+            if tool_call.get("id"):
+                state["id"] = tool_call["id"]
+
+            function = tool_call.get("function", {})
+            if function.get("name"):
+                state["name"] = function["name"]
+
+            if state["name"] and not state["started"]:
+                yield {
+                    "event": "content_block_start",
+                    "data": {
+                        "type": "content_block_start",
+                        "index": block_index,
+                        "content_block": {
+                            "type": "tool_use",
+                            "id": state["id"],
+                            "name": state["name"],
+                            "input": {},
+                        },
+                    },
+                }
+                state["started"] = True
+
+            arguments = function.get("arguments", "")
+            if state["started"] and arguments:
+                yield {
+                    "event": "content_block_delta",
+                    "data": {
+                        "type": "content_block_delta",
+                        "index": block_index,
+                        "delta": {
+                            "type": "input_json_delta",
+                            "partial_json": arguments,
+                        },
+                    },
+                }
+
+        if choice.get("finish_reason"):
+            if text_block_open and 0 not in stopped_blocks:
+                yield {
+                    "event": "content_block_stop",
+                    "data": {"type": "content_block_stop", "index": 0},
+                }
+                stopped_blocks.add(0)
+                text_block_open = False
+
+            for block_index in sorted(tool_states):
+                state = tool_states[block_index]
+                if state["started"] and block_index not in stopped_blocks:
+                    yield {
+                        "event": "content_block_stop",
+                        "data": {"type": "content_block_stop", "index": block_index},
+                    }
+                    stopped_blocks.add(block_index)
+
+            usage = chunk.get("usage", {})
+            yield {
+                "event": "message_delta",
+                "data": {
+                    "type": "message_delta",
+                    "delta": {
+                        "stop_reason": _map_finish_reason(choice["finish_reason"]),
+                        "stop_sequence": None,
+                    },
+                    "usage": {
+                        "input_tokens": usage.get("prompt_tokens", 0),
+                        "output_tokens": usage.get("completion_tokens", 0),
+                    },
+                },
+            }
+            yield {"event": "message_stop", "data": {"type": "message_stop"}}
+
+
 def _strip_none(value):
     if isinstance(value, dict):
         return {
