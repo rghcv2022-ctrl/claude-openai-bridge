@@ -66,6 +66,14 @@ def anthropic_request_to_openai(payload, default_model, model_aliases):
         if role == "assistant":
             messages.append(_convert_assistant_message_content(message.get("content", [])))
             continue
+        if role == "system":
+            messages.append(
+                {
+                    "role": "system",
+                    "content": _flatten_text_blocks(message.get("content", [])),
+                }
+            )
+            continue
         raise ValueError(f"Unsupported message role: {role}")
 
     converted = {
