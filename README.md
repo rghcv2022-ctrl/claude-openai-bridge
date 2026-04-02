@@ -18,8 +18,11 @@ to a GMN OpenAI-compatible `chat/completions` upstream.
 - Health: `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\healthcheck.ps1`
 - Install logon task: `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-task.ps1`
 - Remove logon task: `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\uninstall-task.ps1`
+- Install Startup shortcut: `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-startup-shortcut.ps1`
+- Remove Startup shortcut: `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\uninstall-startup-shortcut.ps1`
 
 If Windows returns `Access is denied` while installing the logon task, run that command in a session that has permission to create Task Scheduler entries for your account.
+If Task Scheduler is blocked by policy, the Startup shortcut option is the admin-free fallback and runs after you sign in to Windows.
 
 ## Config
 

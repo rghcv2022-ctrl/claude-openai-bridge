@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from bridge import (
 
 
 DEFAULT_CONFIG_FILE = "config.json"
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 @lru_cache(maxsize=1)
@@ -39,36 +41,79 @@ def load_config():
 def build_upstream_url(config):
     return f"{config['upstream_base_url'].rstrip('/')}{config['upstream_chat_path']}"
 
+def _get_retry_settings(config):
+    max_attempts = int(config.get("request_retry_attempts", 2))
+    if max_attempts < 1:
+        max_attempts = 1
+    backoff = float(config.get("request_retry_backoff_seconds", 0.5))
+    if backoff < 0:
+        backoff = 0
+    return max_attempts, backoff
 
 def call_upstream_json(openai_payload, config):
-    with httpx.Client(timeout=config["request_timeout_seconds"]) as client:
-        response = client.post(
-            build_upstream_url(config),
-            headers={"Authorization": f"Bearer {config['upstream_api_key']}"},
-            json=openai_payload,
-        )
-        response.raise_for_status()
-        return response
+    max_attempts, backoff = _get_retry_settings(config)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with httpx.Client(timeout=config["request_timeout_seconds"]) as client:
+                response = client.post(
+                    build_upstream_url(config),
+                    headers={"Authorization": f"Bearer {config['upstream_api_key']}"},
+                    json=openai_payload,
+                )
+                response.raise_for_status()
+                return response
+        except httpx.HTTPStatusError as exc:
+            if (
+                exc.response is not None
+                and exc.response.status_code in RETRYABLE_STATUS_CODES
+                and attempt < max_attempts
+            ):
+                time.sleep(backoff * attempt)
+                continue
+            raise
+        except httpx.RequestError:
+            if attempt < max_attempts:
+                time.sleep(backoff * attempt)
+                continue
+            raise
 
 
 def call_upstream_stream(openai_payload, config):
-    with httpx.Client(timeout=config["request_timeout_seconds"]) as client:
-        with client.stream(
-            "POST",
-            build_upstream_url(config),
-            headers={"Authorization": f"Bearer {config['upstream_api_key']}"},
-            json=openai_payload,
-        ) as response:
-            response.raise_for_status()
-            for line in response.iter_lines():
-                if isinstance(line, bytes):
-                    line = line.decode("utf-8")
-                if not line or not line.startswith("data: "):
-                    continue
-                data = line[6:]
-                if data == "[DONE]":
-                    break
-                yield json.loads(data)
+    max_attempts, backoff = _get_retry_settings(config)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with httpx.Client(timeout=config["request_timeout_seconds"]) as client:
+                with client.stream(
+                    "POST",
+                    build_upstream_url(config),
+                    headers={"Authorization": f"Bearer {config['upstream_api_key']}"},
+                    json=openai_payload,
+                ) as response:
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if isinstance(line, bytes):
+                            line = line.decode("utf-8")
+                        if not line or not line.startswith("data: "):
+                            continue
+                        data = line[6:]
+                        if data == "[DONE]":
+                            return
+                        yield json.loads(data)
+            return
+        except httpx.HTTPStatusError as exc:
+            if (
+                exc.response is not None
+                and exc.response.status_code in RETRYABLE_STATUS_CODES
+                and attempt < max_attempts
+            ):
+                time.sleep(backoff * attempt)
+                continue
+            raise
+        except httpx.RequestError:
+            if attempt < max_attempts:
+                time.sleep(backoff * attempt)
+                continue
+            raise
 
 
 def anthropic_error_response(status_code, message, error_type="invalid_request_error"):

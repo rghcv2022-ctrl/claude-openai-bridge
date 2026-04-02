@@ -6,6 +6,8 @@
   "upstream_chat_path": "/chat/completions",
   "default_model": "gpt-5.4",
   "request_timeout_seconds": 600,
+  "request_retry_attempts": 2,
+  "request_retry_backoff_seconds": 0.5,
   "log_level": "INFO",
   "model_aliases": {
     "claude-*": "gpt-5.4",
