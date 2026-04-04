@@ -305,6 +305,20 @@ def build_app():
         )
         return JSONResponse(anthropic_payload)
 
+    @app.post("/v1/messages/batches")
+    async def message_batches():
+        return JSONResponse(
+            {"data": [], "has_more": False, "first_id": None, "last_id": None}
+        )
+
+    @app.get("/{rest_of_path:path}")
+    async def catch_all_get():
+        return JSONResponse({})
+
+    @app.post("/{rest_of_path:path}")
+    async def catch_all_post():
+        return JSONResponse({})
+
     return app
 
 
