@@ -8,23 +8,29 @@ def resolve_upstream_model(requested_model, default_model, model_aliases):
     if not requested_model:
         return default_model
 
-    exact_match = model_aliases.get(requested_model)
-    if exact_match:
-        return exact_match
+    if model_aliases:
+        exact_match = model_aliases.get(requested_model)
+        if exact_match:
+            if exact_match == "auto":
+                return default_model
+            return exact_match
 
     if requested_model.startswith("gpt-"):
         return requested_model
 
     best_match = None
     best_score = None
-    for index, (pattern, mapped_model) in enumerate(model_aliases.items()):
-        if "*" not in pattern or not fnmatch.fnmatch(requested_model, pattern):
-            continue
+    if model_aliases:
+        for index, (pattern, mapped_model) in enumerate(model_aliases.items()):
+            if "*" not in pattern or not fnmatch.fnmatch(requested_model, pattern):
+                continue
+            if mapped_model == "auto":
+                mapped_model = default_model
 
-        score = (len(pattern.replace("*", "")), -pattern.count("*"), -index)
-        if best_score is None or score > best_score:
-            best_score = score
-            best_match = mapped_model
+            score = (len(pattern.replace("*", "")), -pattern.count("*"), -index)
+            if best_score is None or score > best_score:
+                best_score = score
+                best_match = mapped_model
 
     if best_match:
         return best_match
@@ -55,7 +61,9 @@ def anthropic_request_to_openai(payload, default_model, model_aliases):
 
     system = payload.get("system")
     if system is not None:
-        system_content = system if isinstance(system, str) else _flatten_text_blocks(system)
+        system_content = (
+            system if isinstance(system, str) else _flatten_text_blocks(system)
+        )
         messages.append({"role": "system", "content": system_content})
 
     for message in payload.get("messages", []):
@@ -64,7 +72,9 @@ def anthropic_request_to_openai(payload, default_model, model_aliases):
             messages.extend(_convert_user_message_content(message.get("content", [])))
             continue
         if role == "assistant":
-            messages.append(_convert_assistant_message_content(message.get("content", [])))
+            messages.append(
+                _convert_assistant_message_content(message.get("content", []))
+            )
             continue
         if role == "system":
             messages.append(
@@ -105,7 +115,9 @@ def _convert_user_message_content(content):
             continue
         if block_type == "tool_result":
             if text_blocks:
-                messages.append({"role": "user", "content": _flatten_text_blocks(text_blocks)})
+                messages.append(
+                    {"role": "user", "content": _flatten_text_blocks(text_blocks)}
+                )
                 text_blocks = []
 
             tool_content = block.get("content", [])
@@ -399,9 +411,7 @@ def openai_stream_to_anthropic_events(chunks, requested_model):
 def _strip_none(value):
     if isinstance(value, dict):
         return {
-            key: _strip_none(item)
-            for key, item in value.items()
-            if item is not None
+            key: _strip_none(item) for key, item in value.items() if item is not None
         }
     if isinstance(value, list):
         return [_strip_none(item) for item in value]

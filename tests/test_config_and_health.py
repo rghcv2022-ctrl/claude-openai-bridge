@@ -9,7 +9,9 @@ from conftest import make_config, write_config
 
 def test_load_config_reads_json_from_env(tmp_path, monkeypatch):
     config_path = tmp_path / "config.json"
-    write_config(config_path, make_config(model_aliases={"claude-sonnet-4-5": "gpt-5.4"}))
+    write_config(
+        config_path, make_config(model_aliases={"claude-sonnet-4-5": "gpt-5.4"})
+    )
     monkeypatch.setenv("CLAUDE_OPENAI_PROXY_CONFIG", str(config_path))
 
     cfg = load_config()
@@ -51,19 +53,21 @@ def test_load_config_reads_utf8_bom_json_from_env(tmp_path, monkeypatch):
 
 def test_healthz_reads_json_config(tmp_path, monkeypatch):
     config_path = tmp_path / "config.json"
-    write_config(config_path, make_config(model_aliases={"claude-sonnet-4-5": "gpt-5.4"}))
+    write_config(
+        config_path, make_config(model_aliases={"claude-sonnet-4-5": "gpt-5.4"})
+    )
     monkeypatch.setenv("CLAUDE_OPENAI_PROXY_CONFIG", str(config_path))
 
     client = TestClient(build_app())
     response = client.get("/healthz")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "ok": True,
-        "listen": "127.0.0.1:43118",
-        "upstream_base_url": "https://gmncode.cn/v1",
-        "default_model": "gpt-5.4",
-    }
+    data = response.json()
+    assert data["ok"] is True
+    assert data["listen"] == "127.0.0.1:43118"
+    assert data["upstream_base_url"] == "https://gmncode.cn/v1"
+    assert data["default_model"] == "gpt-5.4"
+    assert data["mode"] == "static"
 
 
 def test_resolve_upstream_model_uses_exact_alias():
